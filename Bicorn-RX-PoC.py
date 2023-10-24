@@ -12,11 +12,13 @@ from Pietrzak_VDF import VDF, gen_recursive_halving_proof, verify_recursive_halv
 ### Unitility functions
 
 # keccack hash function outputs int for strings 
-def hash_eth(n, *strings): 
+def mod_hash_eth(n, *strings): 
     input = ''.join(map(str, strings))
     r = Web3.keccak(input.encode('utf-8'))
+    r = int(r.hex(), 16)
+    r=r%n
     
-    return int(r.hex(), 16)
+    return r
     
 def hash(*strings): # utility function for string hash
     r = hashlib.sha3_256()
@@ -78,9 +80,9 @@ if __name__=='__main__':
     a = []
     c = []
     
-    T = 10000000 # VDF를 위한 파라미터. 사전 연산을 예방하며 t에 비례한 시간이 소모됨
-    N = 9992421589992149215123 # 군(group)을 생성하기 위한 정수 크기 제한   
-    member = 100  # 참여자 수
+    T = 100000000 # VDF를 위한 파라미터. 사전 연산을 예방하며 t에 비례한 시간이 소모됨
+    N = 99924215899921492222323 # 군(group)을 생성하기 위한 정수 크기 제한   
+    member = 5  # 참여자 수
 
 
     print('\n   ___  _                       ___  _  __  ___       _____ \n \
@@ -95,11 +97,11 @@ if __name__=='__main__':
     print('\n------------------------------------------------\n')
     
     print('[+] PoC environment:')
-    print('\t - Definition of Group: ', N)
-    print('\t - Time Delay for VDF: ', T)
+    print('\t - Description of QR+ Group: ', N)
+    print('\t - Time Delay for VDF (T): ', T)
     
     g = GGen(N)	
-    print('\t - g is generated: ', g)
+    print('\t - Group generator (g): ', g)
     
     # Compute h <- g^(2^t), optionally with PoE
     #h, proof = simple_VDF(g)
@@ -163,7 +165,7 @@ if __name__=='__main__':
     
     # b* <- H(c_1||...||c_n)
     commits = ''.join(map(str, c))
-    b_star = hash_eth(commits)
+    b_star = mod_hash_eth(N, commits)
     
     # print('[+] Input commits: ', commits)
     # b_star = int(b_star, 16)
@@ -190,7 +192,7 @@ if __name__=='__main__':
     omega = 1
     
     for i in range(member):
-        omega = ( omega*pow(pow(h, hash_eth(c[i], b_star), N), a[i], N) ) % N
+        omega = ( omega*pow(pow(h, mod_hash_eth(N, c[i], b_star), N), a[i], N) ) % N
         
     print('[+] Revealed Random: ', omega, '\n')
     
@@ -219,10 +221,9 @@ if __name__=='__main__':
     recov = 1
     
     for i in c:
-        temp = pow(i, hash_eth(i, b_star), N)
+        temp = pow(i, mod_hash_eth(N, i, b_star), N)
         recov = (recov * temp) % N
        
-    recov_backup = recov 
     # recov = simple_VDF(recov, N, T)
     
     start = time.time()
@@ -241,13 +242,22 @@ if __name__=='__main__':
     # Wrong input test in the proof chain
     
     start = time.time()
+    
+    # This condition check is not necessary in this code, but for the real communication, the verifier should check if the proof used the same n, g, T 
+    if N != proof_list_recovery[0][0] or recov != proof_list_recovery[0][1] or T != proof_list_recovery[0][3] :
+        print('[-] Fail to Verification: Wrong proof base')
+        print(proof_list_recovery[0])
+        exit()
+        
+    
     test = verify_recursive_halving_proof(proof_list_recovery)   
     end = time.time()
     
     if (test==True):
         print(f"\n[+] Verification Success in {end - start:.5f} sec")
     else:
-        print("\n[-] Fail to verification")    
+        print("\n[-] Fail to verification: Wrong Proof-of-Exponentiation")   
+        exit()
 
     print('')    
         
